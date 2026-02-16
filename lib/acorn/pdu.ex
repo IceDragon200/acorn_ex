@@ -13,12 +13,13 @@ defmodule Acorn.Pdu do
 
   @spec encode(t()) :: {:ok, iodata()}
   def encode(%__MODULE__{} = pdu) do
-    {:ok, [
-      Acorn.StartLine.encode(pdu.start_line),
-      Acorn.CPIM.encode(pdu.cpim),
-    ]}
+    with {:ok, start_line} <- Acorn.StartLine.encode(pdu.start_line),
+         {:ok, cpim} <- Acorn.CPIM.encode(pdu.cpim) do
+      {:ok, [start_line, cpim]}
+    end
   end
 
+  @spec parse(binary()) :: {:ok, t()} | :error
   def parse(blob) do
     case Acorn.Protocol.parse_start_line(blob) do
       {:ok, %Acorn.StartLine{} = sl, rest} ->

@@ -24,6 +24,8 @@ defmodule Acorn.KV.MixProject do
   defp deps do
     [
       {:mox, "~> 1.2"},
+      {:unicode, "~> 1.0"},
+      {:stream_data, "~> 1.1", only: :test},
     ]
   end
 end
