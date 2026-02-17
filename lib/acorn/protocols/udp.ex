@@ -1,6 +1,7 @@
 defmodule Acorn.KV.Protocol.UDP do
   defmodule State do
     defstruct [
+      bind: nil,
       module: nil,
       assigns: nil,
       socket: nil,
@@ -18,6 +19,14 @@ defmodule Acorn.KV.Protocol.UDP do
   """
   use GenServer
 
+  alias Acorn.Pdu
+
+  import Acorn.Utils
+
+  def send_pdu(pid, %Pdu{} = pdu, dest, timeout \\ 15_000) do
+    GenServer.call(pid, {:send_pdu, pdu, dest}, timeout)
+  end
+
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
   end
@@ -26,35 +35,32 @@ defmodule Acorn.KV.Protocol.UDP do
 
   @impl true
   def init(opts) do
-    case Keyword.fetch(opts, :module) do
-      {:ok, module} ->
-        %State{} = state =
-          %State{
-            module: module,
-            assigns: nil
-          }
+    with validate_keyword_required(opts, [:module, :options, :bind]),
+         module <- Keyword.fetch!(opts, :module) do
+      %State{} = state =
+        %State{
+          module: module,
+          assigns: nil
+        }
 
-        args = []
-        if function_exported?(state.module, :init, 1) do
-          case state.module.init(args) do
-            {:ok, assigns} ->
-              %State{} = state =
-                %State{
-                  state
-                  | assigns: assigns
-                }
+      if function_exported?(state.module, :init, 1) do
+        case state.module.init(opts[:options]) do
+          {:ok, assigns} ->
+            %State{} = state =
+              %State{
+                state
+                | bind: Keyword.fetch!(opts, :bind),
+                  assigns: assigns
+              }
 
-              {:ok, state, {:continue, :listen}}
+            {:ok, state, {:continue, :listen}}
 
-            {:error, reason} ->
-              {:error, {:module_error, reason}}
-          end
-        else
-          {:error, :module_missing_init}
+          {:error, reason} ->
+            {:error, {:module_error, reason}}
         end
-
-      :error ->
-        {:error, :missing_module}
+      else
+        {:error, :module_missing_init}
+      end
     end
   end
 
@@ -71,7 +77,7 @@ defmodule Acorn.KV.Protocol.UDP do
   def handle_continue(:listen, %State{} = state) do
     with \
       {:ok, socket} <- :socket.open(:inet, :dgram, :udp),
-      :ok <- :socket.bind(socket, %{family: :inet, port: 7600, addr: {0, 0, 0, 0}})
+      :ok <- :socket.bind(socket, state.bind)
     do
       %State{} = state =
         %State{
@@ -146,13 +152,18 @@ defmodule Acorn.KV.Protocol.UDP do
   def handle_continue({:send_pdus, [item | rest]}, %State{} = state) do
     case item do
       {:send, %Acorn.Pdu{} = pdu, dest} ->
-        case Acorn.Pdu.encode(pdu) do
-          {:ok, blob} ->
-            case :socket.sendto(state.socket, blob, dest) do
-              :ok ->
-                {:noreply, state, {:continue, {:send_pdus, rest}}}
-            end
+        case do_send_pdu(pdu, dest, nil, state) do
+          {:ok, %State{} = state} ->
+            {:noreply, state, {:continue, {:send_pdus, rest}}}
         end
+    end
+  end
+
+  @impl true
+  def handle_call({:send_pdu, %Pdu{} = pdu, dest}, from, %State{} = state) do
+    case do_send_pdu(pdu, dest, from, state) do
+      {:ok, %State{} = state} ->
+        {:reply, :ok, state}
     end
   end
 
@@ -167,6 +178,19 @@ defmodule Acorn.KV.Protocol.UDP do
         {:ok, pdu, state}
 
       :error ->
+        {:ok, state}
+    end
+  end
+
+  defp do_send_pdu(pdu, dest, from, %State{} = state) do
+    case state.module.send_pdu(state.socket, pdu, dest, from, state.assigns) do
+      {:ok, assigns} ->
+        %State{} = state =
+          %State{
+            state
+            | assigns: assigns
+          }
+
         {:ok, state}
     end
   end

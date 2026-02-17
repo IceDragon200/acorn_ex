@@ -14,7 +14,15 @@ defmodule Acorn.KV.Protocol.UDPTest do
         {:ok, %{}}
       end
 
-      {:ok, server} = UDP.start_link(module: Acorn.Support.MockHandle)
+      {:ok, server} = UDP.start_link(
+        module: Acorn.Support.MockHandle,
+        options: [],
+        bind: %{
+          family: :inet,
+          port: 7600,
+          addr: {0, 0, 0, 0}
+        }
+      )
 
       :ok = UDP.stop(server)
     end

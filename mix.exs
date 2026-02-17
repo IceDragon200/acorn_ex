@@ -26,6 +26,7 @@ defmodule Acorn.KV.MixProject do
       {:mox, "~> 1.2"},
       {:unicode, "~> 1.0"},
       {:stream_data, "~> 1.1", only: :test},
+      {:mortar, git: "https://github.com/IceDragon200/mortar"},
     ]
   end
 end

@@ -1,4 +1,6 @@
 defmodule Acorn.Utils do
+  alias Mortar.Net
+
   defguard is_utf8_digit_char?(c) when c >= ?0 and c <= ?9
   defguard is_utf8_ascii_letter_char?(c) when (c >= ?A and c <= ?Z) or (c >= ?a and c <= ?z)
   defguard is_utf8_ascii_space_like_char?(c) when c in [?\t, ?\s]
@@ -19,6 +21,26 @@ defmodule Acorn.Utils do
     0x2029,
   ]
   defguard is_utf8_twochar_newline(c1, c2) when c1 == 0x0D and c2 == 0x0A
+
+  @spec validate_keyword_required(Keyword.t(), [atom()]) :: {:ok, Keyword.t()} | {:error, list()}
+  def validate_keyword_required(keyword, keys) do
+    errors =
+      Enum.reduce(keys, [], fn key, errors ->
+        if Keyword.has_key?(keyword, key) do
+          errors
+        else
+          [{key, :required} | errors]
+        end
+      end)
+
+    case errors do
+      [] ->
+        {:ok, keyword}
+
+      _ ->
+        {:error, errors}
+    end
+  end
 
   @doc """
   Splits off as many characters from the string that would form a simple word (no leading numbers).
@@ -136,4 +158,42 @@ defmodule Acorn.Utils do
   def chomp_space(_) do
     :error
   end
+
+  @spec parse_inet_address(binary()) :: {:ok, :inet.ip_address()} | :error
+  def parse_inet_address(host) when is_binary(host) do
+    case Net.string_to_ip(host) do
+      {:ok, addr} -> {:ok, addr}
+      _ -> :error
+    end
+  end
+
+  def parse_inet_address(_), do: :error
+
+  @spec encode_inet_address(:inet.ip_address()) :: {:ok, binary()} | :error
+  def encode_inet_address(addr) when not is_tuple(addr), do: :error
+
+  def encode_inet_address(addr) do
+    case Net.ip_to_string(addr) do
+      {:ok, value} -> {:ok, value}
+      _ -> :error
+    end
+  end
+
+  @spec encode_identity(nil | binary(), %{addr: :inet.ip_address(), port: non_neg_integer()}) ::
+          {:ok, binary()} | :error
+  def encode_identity(node_name, %{addr: addr, port: port})
+      when (is_nil(node_name) or is_binary(node_name)) and is_integer(port) and port >= 0 and port <= 65_535 do
+    with {:ok, host} <- encode_inet_address(addr) do
+      identity =
+        if is_binary(node_name) and node_name != "" do
+          "#{node_name}@#{host}:#{port}"
+        else
+          "#{host}:#{port}"
+        end
+
+      {:ok, identity}
+    end
+  end
+
+  def encode_identity(_, _), do: :error
 end

@@ -298,6 +298,10 @@ defmodule Acorn.StartLine do
     end
   end
 
+  def parse_request_target(_rest, state, _acc) when state in [:start, :quoted, :literal] do
+    :error
+  end
+
   @spec reversed_charlist_to_utf8_binary(list()) :: binary()
   def reversed_charlist_to_utf8_binary(acc) do
     reversed_charlist_to_utf8_binary(acc, <<>>)
