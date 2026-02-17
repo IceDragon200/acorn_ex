@@ -3,7 +3,7 @@ defmodule Acorn.KV.MixProject do
 
   def project do
     [
-      app: :acorn_kv,
+      app: :acorn_ex,
       version: "0.1.0",
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
